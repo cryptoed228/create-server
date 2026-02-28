@@ -1,0 +1,71 @@
+.PHONY: help wire{{if .Postgres}} sqlc{{end}} swagger build run clean{{if .Postgres}} migrate-up migrate-down{{end}}{{if or .Postgres .Redis}} docker-db-up docker-db-down{{end}}
+
+include .env.development
+export
+
+CMD_DIR=cmd/app
+BIN_DIR=bin
+{{- if .Postgres}}
+MIGRATIONS_DIR=migrations
+{{- end}}
+{{- if or .Postgres .Redis}}
+DEPLOYMENTS_DB_DIR=deployments/db
+{{- end}}
+
+help: ## Показать справку
+	@echo "Доступные команды:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+wire: ## Сгенерировать wire_gen.go
+	@echo "Generating Wire dependencies..."
+	cd $(CMD_DIR) && wire
+{{if .Postgres}}
+sqlc: ## Сгенерировать код из SQL запросов
+	@echo "Generating SQLC code..."
+	sqlc generate
+{{end}}
+swagger: ## Сгенерировать Swagger документацию
+	@echo "Generating Swagger docs..."
+	swag init -g cmd/app/main.go -o api --parseDependency --parseInternal
+
+build:{{if .Postgres}} sqlc{{end}} wire ## Собрать приложение
+	@echo "Building application..."
+	@mkdir -p $(BIN_DIR)
+	go build -o $(BIN_DIR)/server ./$(CMD_DIR)
+
+run: build ## Запустить приложение
+	@echo "Running application..."
+	@./$(BIN_DIR)/server
+
+clean: ## Очистить сгенерированные файлы
+	@echo "Cleaning..."
+	rm -rf $(BIN_DIR)
+	rm -f $(CMD_DIR)/wire_gen.go
+	rm -rf logs/
+{{if .Postgres}}
+migrate-up: ## Применить все миграции
+	@echo "Running migrations UP..."
+	migrate -path $(MIGRATIONS_DIR) \
+		-database "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=$(POSTGRES_SSL_MODE)" \
+		up
+
+migrate-down: ## Откатить последнюю миграцию
+	@echo "Running migration DOWN..."
+	migrate -path $(MIGRATIONS_DIR) \
+		-database "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=$(POSTGRES_SSL_MODE)" \
+		down 1
+{{end}}
+{{- if or .Postgres .Redis}}
+docker-db-up: ## Запустить Docker контейнеры
+	@echo "Creating .env..."
+	rm -rf $(DEPLOYMENTS_DB_DIR)/.env
+	@cp ./.env.development $(DEPLOYMENTS_DB_DIR)/.env
+	@echo "Starting services..."
+	cd $(DEPLOYMENTS_DB_DIR) && docker-compose up -d
+
+docker-db-down: ## Остановить Docker контейнеры
+	@echo "Stopping services..."
+	cd $(DEPLOYMENTS_DB_DIR) && docker-compose down -v
+{{- end}}
+
+.DEFAULT_GOAL := help

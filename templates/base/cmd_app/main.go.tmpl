@@ -1,0 +1,38 @@
+package main
+
+import (
+	"os"
+
+	"{{.ModuleName}}/pkg/logger"
+)
+
+// @title API
+// @version 1.0
+// @host localhost:8080
+// @BasePath /api/v1
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+func main() {
+	env := os.Getenv("ENV")
+	if env == "" {
+		env = "development"
+	}
+
+	if err := logger.Init(env); err != nil {
+		panic(err)
+	}
+	defer logger.Logger.Sync()
+
+	sugar := logger.Sugar
+
+	app, cleanup, err := InitializeApp()
+	if err != nil {
+		sugar.Fatalw("Failed to initialize application", "error", err)
+	}
+	defer cleanup()
+
+	if err := app.Run(); err != nil {
+		sugar.Fatalw("Application failed", "error", err)
+	}
+}

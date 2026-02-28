@@ -1,0 +1,54 @@
+//go:build wireinject
+// +build wireinject
+
+package main
+
+import (
+	"context"
+{{- if .JWT}}
+
+	jwtAdapter "{{.ModuleName}}/internal/adapter/jwt"
+{{- end}}
+{{- if .Postgres}}
+	postgresAdapter "{{.ModuleName}}/internal/adapter/postgres"
+{{- end}}
+{{- if .Redis}}
+	redisAdapter "{{.ModuleName}}/internal/adapter/redis"
+{{- end}}
+	"{{.ModuleName}}/internal/controller/http_v1"
+	"{{.ModuleName}}/pkg/httpserver"
+	"{{.ModuleName}}/pkg/logger"
+{{- if .Postgres}}
+	"{{.ModuleName}}/pkg/postgres"
+{{- end}}
+{{- if .Redis}}
+	pkgRedis "{{.ModuleName}}/pkg/redis"
+{{- end}}
+	"github.com/google/wire"
+)
+
+func ProvideContext() context.Context {
+	return context.Background()
+}
+
+func InitializeApp() (*App, func(), error) {
+	wire.Build(
+		logger.Set,
+		httpserver.Set,
+		http_v1.Set,
+{{- if .Postgres}}
+		postgres.Set,
+		postgresAdapter.Set,
+{{- end}}
+{{- if .Redis}}
+		pkgRedis.Set,
+		redisAdapter.Set,
+{{- end}}
+{{- if .JWT}}
+		jwtAdapter.Set,
+{{- end}}
+		ProvideContext,
+		NewApp,
+	)
+	return nil, nil, nil
+}

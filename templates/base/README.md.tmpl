@@ -1,0 +1,25 @@
+# {{.ProjectName}}
+
+Go сервер на базе Clean Architecture.
+
+## Быстрый старт
+
+```bash
+{{- if or .Postgres .Redis}}
+make docker-db-up
+{{- end}}
+{{- if .Postgres}}
+make migrate-up
+{{- end}}
+make run
+```
+
+Сервер: http://localhost:8080
+Health check: GET /ping
+Swagger: http://localhost:8080/swagger/index.html
+
+## Makefile
+
+```bash
+make help
+```
