@@ -1,9 +1,12 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+
+	"github.com/charmbracelet/huh"
 )
 
 func main() {
@@ -41,6 +44,10 @@ func main() {
 		// Интерактивный режим
 		cfg, err = runCLI(projectName)
 		if err != nil {
+			if errors.Is(err, huh.ErrUserAborted) {
+				fmt.Println("\n  Отменено.")
+				os.Exit(0)
+			}
 			fmt.Fprintf(os.Stderr, "Ошибка: %v\n", err)
 			os.Exit(1)
 		}
