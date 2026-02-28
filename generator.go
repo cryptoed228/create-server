@@ -46,7 +46,7 @@ func getMappings() []templateMapping {
 		// internal/health
 		{Source: "templates/base/internal_health/http_v1.go.tpl", Target: "internal/health/http_v1.go"},
 		// internal/example_uc
-		{Source: "templates/base/internal_example_uc/usecase.go.tpl", Target: "internal/example_uc/usecase.go"},
+		{Source: "templates/base/internal_example_uc/usecase.go.tmpl", Target: "internal/example_uc/usecase.go", IsTmpl: true},
 		{Source: "templates/base/internal_example_uc/http_v1.go.tpl", Target: "internal/example_uc/http_v1.go"},
 		{Source: "templates/base/internal_example_uc/dto.go.tpl", Target: "internal/example_uc/dto.go"},
 		{Source: "templates/base/internal_example_uc/helpers.go.tpl", Target: "internal/example_uc/helpers.go"},

@@ -1,0 +1,61 @@
+package example_uc
+
+import (
+	"context"
+
+	"go.uber.org/zap"
+{{- if .Postgres}}
+	"{{.ModuleName}}/internal/adapter/postgres"
+{{- else if .Redis}}
+	"{{.ModuleName}}/internal/adapter/redis"
+{{- else if .JWT}}
+	"{{.ModuleName}}/internal/adapter/jwt"
+{{- end}}
+)
+{{if or .Postgres .Redis .JWT}}
+
+// Adapter — порт: интерфейс внешних зависимостей use case.
+// Use case зависит от интерфейса, реализация — в internal/adapter/*
+type Adapter interface {
+	// Добавьте методы, которые нужны use case
+}
+{{end}}
+type Usecase struct {
+	logger *zap.SugaredLogger
+{{- if or .Postgres .Redis .JWT}}
+	adapter Adapter
+{{- end}}
+}
+
+{{if .Postgres -}}
+func New(log *zap.SugaredLogger, adpt *postgres.Adapter) *Usecase {
+	return &Usecase{
+		logger:  log,
+		adapter: adpt,
+	}
+}
+{{- else if .Redis -}}
+func New(log *zap.SugaredLogger, adpt *redis.Adapter) *Usecase {
+	return &Usecase{
+		logger:  log,
+		adapter: adpt,
+	}
+}
+{{- else if .JWT -}}
+func New(log *zap.SugaredLogger, adpt *jwt.Adapter) *Usecase {
+	return &Usecase{
+		logger:  log,
+		adapter: adpt,
+	}
+}
+{{- else -}}
+func New(log *zap.SugaredLogger) *Usecase {
+	return &Usecase{
+		logger: log,
+	}
+}
+{{- end}}
+
+func (u *Usecase) Execute(ctx context.Context, input Input) (Output, error) {
+	return Output{}, nil
+}
