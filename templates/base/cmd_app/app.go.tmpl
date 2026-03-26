@@ -6,6 +6,9 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+{{- if .Centrifuge}}
+	"fmt"
+{{- end}}
 
 	"{{.ModuleName}}/pkg/httpserver"
 {{- if .Postgres}}
@@ -13,6 +16,9 @@ import (
 {{- end}}
 {{- if .Redis}}
 	"{{.ModuleName}}/pkg/redis"
+{{- end}}
+{{- if .Centrifuge}}
+	pkgCentrifuge "{{.ModuleName}}/pkg/centrifuge"
 {{- end}}
 	"go.uber.org/zap"
 )
@@ -26,6 +32,9 @@ type App struct {
 {{- if .Redis}}
 	redisClient *redis.Client
 {{- end}}
+{{- if .Centrifuge}}
+	centrifugeNode *pkgCentrifuge.Node
+{{- end}}
 	shutdownTimeout time.Duration
 }
 
@@ -37,6 +46,9 @@ func NewApp(
 {{- end}}
 {{- if .Redis}}
 	redisClient *redis.Client,
+{{- end}}
+{{- if .Centrifuge}}
+	centrifugeNode *pkgCentrifuge.Node,
 {{- end}}
 ) *App {
 	if logger == nil {
@@ -55,6 +67,11 @@ func NewApp(
 		logger.Info("Redis соединение установлено")
 	}
 {{- end}}
+{{- if .Centrifuge}}
+	if centrifugeNode != nil {
+		logger.Info("Centrifuge Node создан")
+	}
+{{- end}}
 
 	return &App{
 		logger:          logger,
@@ -65,12 +82,22 @@ func NewApp(
 {{- if .Redis}}
 		redisClient:     redisClient,
 {{- end}}
+{{- if .Centrifuge}}
+		centrifugeNode:  centrifugeNode,
+{{- end}}
 		shutdownTimeout: 15 * time.Second,
 	}
 }
 
 func (a *App) Run() error {
 	a.logger.Info("Запуск приложения...")
+
+{{- if .Centrifuge}}
+	if err := a.centrifugeNode.Run(); err != nil {
+		return fmt.Errorf("ошибка запуска Centrifuge Node: %w", err)
+	}
+	a.logger.Info("Centrifuge Node запущен")
+{{- end}}
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -95,6 +122,16 @@ func (a *App) shutdown() error {
 	var shutdownErr error
 
 	go func() {
+{{- if .Centrifuge}}
+		if a.centrifugeNode != nil {
+			if err := a.centrifugeNode.Shutdown(ctx); err != nil {
+				a.logger.Errorw("Ошибка остановки Centrifuge Node", "error", err)
+			} else {
+				a.logger.Info("Centrifuge Node остановлен")
+			}
+		}
+{{- end}}
+
 		if err := a.httpServer.Close(ctx); err != nil {
 			a.logger.Errorw("Ошибка остановки HTTP сервера", "error", err)
 			shutdownErr = err

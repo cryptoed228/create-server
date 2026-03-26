@@ -79,6 +79,22 @@ func getMappings() []templateMapping {
 		{Source: "templates/jwt/internal_adapter_jwt/adapter.go.tpl", Target: "internal/adapter/jwt/adapter.go", Module: "jwt"},
 		{Source: "templates/jwt/internal_adapter_jwt/config.go.tpl", Target: "internal/adapter/jwt/config.go", Module: "jwt"},
 		{Source: "templates/jwt/internal_adapter_jwt/wire.go.tpl", Target: "internal/adapter/jwt/wire.go", Module: "jwt"},
+
+		// ===== CENTRIFUGE =====
+		{Source: "templates/centrifuge/pkg_centrifuge/centrifuge.go.tpl", Target: "pkg/centrifuge/centrifuge.go", Module: "centrifuge"},
+		{Source: "templates/centrifuge/pkg_centrifuge/config.go.tpl", Target: "pkg/centrifuge/config.go", Module: "centrifuge"},
+		{Source: "templates/centrifuge/pkg_centrifuge/wire.go.tpl", Target: "pkg/centrifuge/wire.go", Module: "centrifuge"},
+		{Source: "templates/centrifuge/internal_adapter_centrifuge/adapter.go.tpl", Target: "internal/adapter/centrifuge/adapter.go", Module: "centrifuge"},
+		{Source: "templates/centrifuge/internal_adapter_centrifuge/wire.go.tpl", Target: "internal/adapter/centrifuge/wire.go", Module: "centrifuge"},
+		{Source: "templates/centrifuge/internal_controller_ws/http_v1.go.tpl", Target: "internal/controller/ws/http_v1.go", Module: "centrifuge"},
+		{Source: "templates/centrifuge/internal_controller_ws/controller.go.tpl", Target: "internal/controller/ws/controller.go", Module: "centrifuge"},
+		{Source: "templates/centrifuge/internal_controller_ws/wire.go.tpl", Target: "internal/controller/ws/wire.go", Module: "centrifuge"},
+
+		// centrifuge: upgrade_conn usecase
+		{Source: "templates/centrifuge/internal_upgrade_conn/usecase.go.tpl", Target: "internal/upgrade_conn/usecase.go", Module: "centrifuge"},
+		{Source: "templates/centrifuge/internal_upgrade_conn/dto.go.tpl", Target: "internal/upgrade_conn/dto.go", Module: "centrifuge"},
+		{Source: "templates/centrifuge/internal_upgrade_conn/wire.go.tpl", Target: "internal/upgrade_conn/wire.go", Module: "centrifuge"},
+		{Source: "templates/centrifuge/internal_upgrade_conn/helpers.go.tpl", Target: "internal/upgrade_conn/helpers.go", Module: "centrifuge"},
 	}
 }
 
@@ -150,6 +166,8 @@ func isModuleEnabled(module string, cfg ProjectConfig) bool {
 		return cfg.Redis
 	case "jwt":
 		return cfg.JWT
+	case "centrifuge":
+		return cfg.Centrifuge
 	}
 	return false
 }

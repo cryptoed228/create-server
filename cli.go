@@ -13,6 +13,7 @@ type ProjectConfig struct {
 	Postgres    bool
 	Redis       bool
 	JWT         bool
+	Centrifuge  bool
 }
 
 // runCLI — интерактивный ввод параметров проекта
@@ -52,6 +53,7 @@ func runCLI(projectName string) (ProjectConfig, error) {
 					huh.NewOption("PostgreSQL — БД + SQLC + миграции + Docker", "postgres").Selected(true),
 					huh.NewOption("Redis — Кэш + Docker + адаптер", "redis").Selected(true),
 					huh.NewOption("JWT — Авторизация + генерация токенов", "jwt"),
+					huh.NewOption("Centrifuge — WebSocket real-time сервер", "centrifuge"),
 				).
 				Value(&selected),
 		),
@@ -69,6 +71,8 @@ func runCLI(projectName string) (ProjectConfig, error) {
 			cfg.Redis = true
 		case "jwt":
 			cfg.JWT = true
+		case "centrifuge":
+			cfg.Centrifuge = true
 		}
 	}
 

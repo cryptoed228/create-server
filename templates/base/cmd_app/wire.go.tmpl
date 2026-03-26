@@ -15,6 +15,11 @@ import (
 {{- if .Redis}}
 	redisAdapter "{{.ModuleName}}/internal/adapter/redis"
 {{- end}}
+{{- if .Centrifuge}}
+	cfAdapter "{{.ModuleName}}/internal/adapter/centrifuge"
+	"{{.ModuleName}}/internal/controller/ws"
+	upgradeConn "{{.ModuleName}}/internal/upgrade_conn"
+{{- end}}
 	"{{.ModuleName}}/internal/controller/http_v1"
 	"{{.ModuleName}}/pkg/httpserver"
 	"{{.ModuleName}}/pkg/logger"
@@ -23,6 +28,9 @@ import (
 {{- end}}
 {{- if .Redis}}
 	pkgRedis "{{.ModuleName}}/pkg/redis"
+{{- end}}
+{{- if .Centrifuge}}
+	pkgCentrifuge "{{.ModuleName}}/pkg/centrifuge"
 {{- end}}
 	"github.com/google/wire"
 )
@@ -46,6 +54,12 @@ func InitializeApp() (*App, func(), error) {
 {{- end}}
 {{- if .JWT}}
 		jwtAdapter.Set,
+{{- end}}
+{{- if .Centrifuge}}
+		pkgCentrifuge.Set,
+		ws.Set,
+		cfAdapter.Set,
+		upgradeConn.Set,
 {{- end}}
 		ProvideContext,
 		NewApp,

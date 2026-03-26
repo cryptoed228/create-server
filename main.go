@@ -15,6 +15,7 @@ func main() {
 	withPostgres := flag.Bool("postgres", false, "Include PostgreSQL")
 	withRedis := flag.Bool("redis", false, "Include Redis")
 	withJWT := flag.Bool("jwt", false, "Include JWT")
+	withCentrifuge := flag.Bool("centrifuge", false, "Include Centrifuge WebSocket")
 	withAll := flag.Bool("all", false, "Include all modules")
 	flag.Parse()
 
@@ -39,6 +40,7 @@ func main() {
 			Postgres:    *withPostgres || *withAll,
 			Redis:       *withRedis || *withAll,
 			JWT:         *withJWT || *withAll,
+			Centrifuge:  *withCentrifuge || *withAll,
 		}
 	} else {
 		// Интерактивный режим

@@ -10,9 +10,11 @@ import (
 	"{{.ModuleName}}/internal/adapter/redis"
 {{- else if .JWT}}
 	"{{.ModuleName}}/internal/adapter/jwt"
+{{- else if .Centrifuge}}
+	"{{.ModuleName}}/internal/adapter/centrifuge"
 {{- end}}
 )
-{{if or .Postgres .Redis .JWT}}
+{{if or .Postgres .Redis .JWT .Centrifuge}}
 
 // Adapter — порт: интерфейс внешних зависимостей use case.
 // Use case зависит от интерфейса, реализация — в internal/adapter/*
@@ -22,7 +24,7 @@ type Adapter interface {
 {{end}}
 type Usecase struct {
 	logger *zap.SugaredLogger
-{{- if or .Postgres .Redis .JWT}}
+{{- if or .Postgres .Redis .JWT .Centrifuge}}
 	adapter Adapter
 {{- end}}
 }
@@ -43,6 +45,13 @@ func New(log *zap.SugaredLogger, adpt *redis.Adapter) *Usecase {
 }
 {{- else if .JWT -}}
 func New(log *zap.SugaredLogger, adpt *jwt.Adapter) *Usecase {
+	return &Usecase{
+		logger:  log,
+		adapter: adpt,
+	}
+}
+{{- else if .Centrifuge -}}
+func New(log *zap.SugaredLogger, adpt *centrifuge.Adapter) *Usecase {
 	return &Usecase{
 		logger:  log,
 		adapter: adpt,
