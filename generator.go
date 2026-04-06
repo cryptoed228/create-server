@@ -58,6 +58,8 @@ func getMappings() []templateMapping {
 		{Source: "templates/base/docker-compose.yaml.tmpl", Target: "deployments/db/docker-compose.yaml", IsTmpl: true},
 		{Source: "templates/base/README.md.tmpl", Target: "README.md", IsTmpl: true},
 		{Source: "templates/base/gitignore", Target: ".gitignore"},
+		// Claude Code skill
+		{Source: "templates/base/claude_commands/backend.md.tpl", Target: ".claude/commands/backend.md"},
 
 		// ===== POSTGRES =====
 		{Source: "templates/postgres/pkg_postgres/postgres.go.tpl", Target: "pkg/postgres/postgres.go", Module: "postgres"},

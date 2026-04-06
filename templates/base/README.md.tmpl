@@ -23,3 +23,18 @@ Swagger: http://localhost:8080/swagger/index.html
 ```bash
 make help
 ```
+
+## Claude Code
+
+В проекте есть скилл `/backend` для [Claude Code](https://claude.ai/code). Он содержит все правила архитектуры проекта — vertical-slice usecases, адаптеры, domain, Wire DI и т.д.
+
+### Как использовать
+
+1. Откройте проект в Claude Code
+2. Напишите `/backend` и затем задачу, например:
+
+```
+/backend создай CRUD для сущности Order: create, get by id, list с пагинацией
+```
+
+Claude создаст все файлы по правилам архитектуры: usecase пакеты, dto с валидацией, хендлеры, методы адаптера, domain модель, маршруты в контроллере и Wire.

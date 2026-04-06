@@ -18,7 +18,7 @@ type Pool struct {
 }
 
 func New(ctx context.Context, cfg Config) (*Pool, error) {
-	poolCfg, err := pgxpool.ParseConfig(cfg.DSN())
+	poolCfg, err := pgxpool.ParseConfig(cfg.URL)
 	if err != nil {
 		return nil, fmt.Errorf("error parse postgres config: %w", err)
 	}

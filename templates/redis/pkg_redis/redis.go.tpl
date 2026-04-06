@@ -17,11 +17,12 @@ type Client struct {
 }
 
 func New(ctx context.Context, cfg Config) (*Client, error) {
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     cfg.Addr(),
-		Password: cfg.Password,
-		DB:       cfg.DB,
-	})
+	opts, err := redis.ParseURL(cfg.URL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse redis url: %w", err)
+	}
+
+	rdb := redis.NewClient(opts)
 
 	// Fail fast — проверяем доступность Redis при старте
 	if err := rdb.Ping(ctx).Err(); err != nil {

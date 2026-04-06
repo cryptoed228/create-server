@@ -1,5 +1,5 @@
 // Файл config.go — конфигурация PostgreSQL из переменных окружения.
-// Поля USER, PASSWORD, DB — обязательные. Приложение не запустится без них.
+// Подключение задаётся через единый URL: DB_POSTGRES_URL.
 package postgres
 
 import (
@@ -9,20 +9,7 @@ import (
 )
 
 type Config struct {
-	Host     string `envconfig:"POSTGRES_HOST" default:"localhost"`
-	Port     int    `envconfig:"POSTGRES_PORT" default:"5432"`
-	User     string `envconfig:"POSTGRES_USER" required:"true"`
-	Password string `envconfig:"POSTGRES_PASSWORD" required:"true"`
-	Database string `envconfig:"POSTGRES_DB" required:"true"`
-	SSLMode  string `envconfig:"POSTGRES_SSL_MODE" default:"disable"`
-}
-
-// DSN — строка подключения в формате PostgreSQL URI
-func (c Config) DSN() string {
-	return fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		c.User, c.Password, c.Host, c.Port, c.Database, c.SSLMode,
-	)
+	URL string `envconfig:"DB_POSTGRES_URL" required:"true"`
 }
 
 func LoadConfig() (Config, error) {
