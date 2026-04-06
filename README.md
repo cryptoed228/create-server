@@ -90,6 +90,27 @@ make migrate-up     # Применить миграции (если PostgreSQL)
 make run            # Запустить сервер
 ```
 
+## Claude Code скилл /backend
+
+В каждый сгенерированный проект автоматически добавляется скилл `.claude/commands/backend.md` для [Claude Code](https://claude.ai/code). Он содержит все правила архитектуры: vertical-slice usecases, адаптеры, domain, Wire DI, response helpers.
+
+### Использование в сгенерированном проекте
+
+```
+/backend создай CRUD для сущности Order
+```
+
+### Установка в существующий проект
+
+Если проект создан не через create-server, скопируйте [`backend.md`](backend.md) в свой проект:
+
+```bash
+mkdir -p .claude/commands
+curl -o .claude/commands/backend.md https://raw.githubusercontent.com/cryptoed228/create-server/main/backend.md
+```
+
+Затем используйте `/backend` в Claude Code.
+
 ## Лицензия
 
 MIT
