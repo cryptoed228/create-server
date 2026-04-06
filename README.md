@@ -106,7 +106,7 @@ make run            # Запустить сервер
 
 ```bash
 mkdir -p .claude/commands
-curl -o .claude/commands/backend.md https://raw.githubusercontent.com/cryptoed228/create-server/main/backend.md
+curl -o .claude/commands/backend.md https://raw.githubusercontent.com/cryptoed228/create-server/main/.claude/commands/backend.md
 ```
 
 Затем используйте `/backend` в Claude Code.
