@@ -291,6 +291,51 @@ Location: `internal/controller/http_v1/controller.go`
 
 The controller creates the router and maps routes to usecase handlers. It depends ONLY on usecase handler packages — no adapters, no business logic.
 
+The controller has its own `config.go` with CORS settings loaded from environment variables. This follows the general rule: **if a config is only used by a specific package, put `config.go` in that package.**
+
+### config.go:
+
+```go
+// internal/controller/http_v1/config.go
+package http_v1
+
+import (
+    "fmt"
+    "github.com/kelseyhightower/envconfig"
+)
+
+type Config struct {
+    AllowOrigins     []string `envconfig:"CORS_ALLOW_ORIGINS" default:"*"`
+    AllowMethods     []string `envconfig:"CORS_ALLOW_METHODS" default:"GET,POST,PUT,DELETE,OPTIONS"`
+    AllowHeaders     []string `envconfig:"CORS_ALLOW_HEADERS" default:"Content-Type,Authorization"`
+    ExposeHeaders    []string `envconfig:"CORS_EXPOSE_HEADERS" default:"Content-Length"`
+    AllowCredentials bool     `envconfig:"CORS_ALLOW_CREDENTIALS" default:"true"`
+}
+
+func LoadConfig() (Config, error) {
+    var cfg Config
+    if err := envconfig.Process("", &cfg); err != nil {
+        return Config{}, fmt.Errorf("failed to load http_v1 controller config: %w", err)
+    }
+    return cfg, nil
+}
+```
+
+### wire.go:
+
+```go
+package http_v1
+
+import "github.com/google/wire"
+
+var Set = wire.NewSet(
+    LoadConfig,
+    Controller,
+)
+```
+
+### controller.go:
+
 ```go
 package http_v1
 
@@ -306,6 +351,7 @@ import (
 )
 
 func Controller(
+    cfg Config,
     createUser *create_user_uc.HTTPv1,
     getUser *get_user_uc.HTTPv1,
     listUsers *list_users_uc.HTTPv1,
@@ -313,11 +359,11 @@ func Controller(
     r := gin.Default()
 
     r.Use(cors.New(cors.Config{
-        AllowOrigins:     []string{"*"},
-        AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-        AllowHeaders:     []string{"Content-Type", "Authorization"},
-        ExposeHeaders:    []string{"Content-Length"},
-        AllowCredentials: true,
+        AllowOrigins:     cfg.AllowOrigins,
+        AllowMethods:     cfg.AllowMethods,
+        AllowHeaders:     cfg.AllowHeaders,
+        ExposeHeaders:    cfg.ExposeHeaders,
+        AllowCredentials: cfg.AllowCredentials,
     }))
 
     r.GET("/ping", health.Handle)
@@ -336,11 +382,14 @@ func Controller(
 ```
 
 **CRITICAL RULES for Controller:**
+- The Controller function accepts `cfg Config` as the first argument — CORS is configured from env vars, not hardcoded
 - The Controller function accepts usecase handlers as arguments (Wire injects them)
 - Route mapping is: `v1.METHOD("/path", handler.Handle)`
 - Controller has ZERO business logic — just routing
 - Controller does NOT import adapters or domain — only usecase packages and infrastructure (cors, swagger)
 - Group routes logically: `/api/v1/users`, `/api/v1/orders`, etc.
+- When adding a new feature, add the handler to the Controller function signature and add the route
+- **All cross-cutting checks (JWT auth, role verification, rate limiting, request logging, etc.) MUST be implemented as Gin middleware and applied in the controller via `.Use()`.** The controller is ONLY responsible for routing: defining groups, attaching middleware to groups, and mapping routes to handler methods. No check logic lives in handlers or usecases — if a route needs auth, add `authMiddleware` to the group; if it needs a specific role, add `roleMiddleware("admin")`. Middleware lives in `internal/controller/http_v1/middleware/`.
 
 ---
 
@@ -357,16 +406,17 @@ package domain
 import "time"
 
 type User struct {
-    ID        string    `json:"id"`
-    Email     string    `json:"email"`
-    Name      string    `json:"name"`
-    CreatedAt time.Time `json:"created_at"`
-    UpdatedAt time.Time `json:"updated_at"`
+    ID        string
+    Email     string
+    Name      string
+    CreatedAt time.Time
+    UpdatedAt time.Time
 }
 ```
 
 **CRITICAL RULES for Domain:**
 - Domain models are pure data structs — no methods with business logic
+- **Domain structs MUST NOT have `json:` tags or any other serialization annotations.** Domain is a clean layer with pure Go structs. All serialization markup (`json:`, `xml:`, etc.) belongs in DTOs (`dto.go` in usecase packages) — that is where data crosses the boundary to the outside world.
 - Adapters return domain types (map DB rows → domain structs)
 - Usecases accept and return domain types (or their own Input/Output DTOs)
 - Domain NEVER imports from adapter, usecase, or controller packages
@@ -378,9 +428,91 @@ type User struct {
 
 Location: `internal/adapter/{name}/`
 
-Each external service gets its own adapter package.
+Each external service gets its own adapter package. The adapter wraps a `pkg/` connection and adds business methods that return domain types.
 
-### adapter.go:
+### Postgres Adapter — uses sqlc for ALL queries
+
+The postgres adapter uses **sqlc** for all database queries. You NEVER write raw SQL in Go code — all queries live in `.sql` files, sqlc generates type-safe Go code, and the adapter calls the generated functions.
+
+#### Step 1: Write SQL queries
+
+Create `.sql` files in `internal/adapter/postgres/queries/` grouped by entity:
+
+```sql
+-- internal/adapter/postgres/queries/user.sql
+
+-- name: CreateUser :one
+INSERT INTO users (email, name, password)
+VALUES ($1, $2, $3)
+RETURNING id, email, name, created_at, updated_at;
+
+-- name: GetUserByID :one
+SELECT id, email, name, created_at, updated_at
+FROM users
+WHERE id = $1;
+
+-- name: GetUserByEmail :one
+SELECT id, email, name, created_at, updated_at
+FROM users
+WHERE email = $1;
+
+-- name: ListUsers :many
+SELECT id, email, name, created_at, updated_at
+FROM users
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountUsers :one
+SELECT count(*) FROM users;
+
+-- name: UpdateUser :one
+UPDATE users
+SET name = $2, updated_at = now()
+WHERE id = $1
+RETURNING id, email, name, created_at, updated_at;
+
+-- name: DeleteUser :exec
+DELETE FROM users WHERE id = $1;
+```
+
+**sqlc query annotations:**
+- `-- name: QueryName :one` — returns a single row (generates `func` returning one struct)
+- `-- name: QueryName :many` — returns multiple rows (generates `func` returning `[]struct`)
+- `-- name: QueryName :exec` — no result rows (INSERT/UPDATE/DELETE without RETURNING)
+- `-- name: QueryName :execrows` — returns affected row count
+- `-- name: QueryName :execresult` — returns `pgconn.CommandTag`
+
+#### Step 2: Generate code
+
+```bash
+make sqlc
+```
+
+This reads `sqlc.yaml` and generates type-safe Go code into `internal/adapter/postgres/generated/`:
+- `models.go` — structs matching your DB tables
+- `querier.go` — interface with all query methods
+- `db.go` — `New(pool)` constructor for the Queries type
+- `*.sql.go` — implementations for each `.sql` file
+
+The `sqlc.yaml` config (already generated at project root):
+```yaml
+version: "2"
+sql:
+  - engine: "postgresql"
+    schema: "migrations/"
+    queries: "internal/adapter/postgres/queries/"
+    gen:
+      go:
+        package: "generated"
+        out: "internal/adapter/postgres/generated"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_interface: true
+        emit_exact_table_names: false
+        emit_empty_slices: true
+```
+
+#### Step 3: Use generated code in the adapter
 
 ```go
 // internal/adapter/postgres/adapter.go
@@ -388,20 +520,21 @@ package postgres
 
 import (
     pgxPool "{{MODULE}}/pkg/postgres"
+    "{{MODULE}}/internal/adapter/postgres/generated"
 )
 
 type Adapter struct {
-    pool *pgxPool.Pool
+    q *generated.Queries
 }
 
 func New(pgPool *pgxPool.Pool) *Adapter {
     return &Adapter{
-        pool: pgPool,
+        q: generated.New(pgPool),
     }
 }
 ```
 
-### Business methods in separate files:
+Business methods in separate files by entity — they call sqlc generated functions and map results to domain types:
 
 ```go
 // internal/adapter/postgres/user.go
@@ -411,39 +544,98 @@ import (
     "context"
     "fmt"
 
+    "{{MODULE}}/internal/adapter/postgres/generated"
     "{{MODULE}}/internal/domain"
 )
 
 func (a *Adapter) CreateUser(ctx context.Context, user domain.User) (domain.User, error) {
-    query := `INSERT INTO users (email, name) VALUES ($1, $2) RETURNING id, email, name, created_at, updated_at`
-
-    var result domain.User
-    err := a.pool.QueryRow(ctx, query, user.Email, user.Name).Scan(
-        &result.ID, &result.Email, &result.Name, &result.CreatedAt, &result.UpdatedAt,
-    )
+    row, err := a.q.CreateUser(ctx, generated.CreateUserParams{
+        Email:    user.Email,
+        Name:     user.Name,
+        Password: user.Password,
+    })
     if err != nil {
         return domain.User{}, fmt.Errorf("insert user: %w", err)
     }
 
-    return result, nil
+    return toDomainUser(row), nil
+}
+
+func (a *Adapter) GetUserByID(ctx context.Context, id string) (domain.User, error) {
+    row, err := a.q.GetUserByID(ctx, id)
+    if err != nil {
+        return domain.User{}, fmt.Errorf("get user by id: %w", err)
+    }
+
+    return toDomainUser(row), nil
 }
 
 func (a *Adapter) GetUserByEmail(ctx context.Context, email string) (domain.User, error) {
-    query := `SELECT id, email, name, created_at, updated_at FROM users WHERE email = $1`
-
-    var user domain.User
-    err := a.pool.QueryRow(ctx, query, email).Scan(
-        &user.ID, &user.Email, &user.Name, &user.CreatedAt, &user.UpdatedAt,
-    )
+    row, err := a.q.GetUserByEmail(ctx, email)
     if err != nil {
         return domain.User{}, fmt.Errorf("get user by email: %w", err)
     }
 
-    return user, nil
+    return toDomainUser(row), nil
+}
+
+func (a *Adapter) ListUsers(ctx context.Context, limit, offset int) ([]domain.User, int, error) {
+    total, err := a.q.CountUsers(ctx)
+    if err != nil {
+        return nil, 0, fmt.Errorf("count users: %w", err)
+    }
+
+    rows, err := a.q.ListUsers(ctx, generated.ListUsersParams{
+        Limit:  int32(limit),
+        Offset: int32(offset),
+    })
+    if err != nil {
+        return nil, 0, fmt.Errorf("list users: %w", err)
+    }
+
+    users := make([]domain.User, 0, len(rows))
+    for _, row := range rows {
+        users = append(users, toDomainUser(row))
+    }
+
+    return users, int(total), nil
+}
+
+// toDomainUser maps sqlc-generated row to domain model.
+// Keep mappers in the same file as the methods that use them.
+func toDomainUser(row generated.User) domain.User {
+    return domain.User{
+        ID:        row.ID,
+        Email:     row.Email,
+        Name:      row.Name,
+        CreatedAt: row.CreatedAt,
+        UpdatedAt: row.UpdatedAt,
+    }
 }
 ```
 
-### wire.go:
+### Non-postgres adapters (Redis, JWT, Telegram, S3, etc.)
+
+For adapters that don't use sqlc, the pattern is the same struct + business methods, just without generated code:
+
+```go
+// internal/adapter/redis/adapter.go
+package redis
+
+import (
+    pkgRedis "{{MODULE}}/pkg/redis"
+)
+
+type Adapter struct {
+    client *pkgRedis.Client
+}
+
+func New(client *pkgRedis.Client) *Adapter {
+    return &Adapter{client: client}
+}
+```
+
+### wire.go (same for all adapters):
 
 ```go
 package postgres
@@ -459,10 +651,12 @@ var Set = wire.NewSet(
 - `adapter.go` ONLY defines the Adapter struct and constructor `New()`
 - Business methods go in separate files grouped by entity: `user.go`, `order.go`, etc.
 - ALL methods are on `*Adapter` — no standalone functions
-- Adapter methods return `domain.*` types — map DB/external data to domain models
+- **Postgres adapter: ALL SQL queries go through sqlc.** Never write raw SQL in Go. Write `.sql` files in `queries/`, run `make sqlc`, use `a.q.QueryName()` in adapter methods
+- Adapter methods return `domain.*` types — map sqlc-generated rows to domain structs using mapper functions (e.g., `toDomainUser`)
 - Adapter NEVER imports from usecase packages
 - Name the adapter package after the service: `postgres`, `redis`, `telegram`, `s3`, `heleket`, etc.
 - The adapter's Wire Set is added to `cmd/app/wire.go` → `InitializeApp()`
+- Wrap all errors with `fmt.Errorf("descriptive message: %w", err)`
 
 ---
 
@@ -628,6 +822,13 @@ u.logger.Warnw("deprecated endpoint called", "path", c.Request.URL.Path)
 - First argument is the message, then key-value pairs
 - Always log errors with the `"error"` key
 - Log at appropriate levels: Debug for dev, Info for operations, Warn for concerns, Error for failures
+- **Handler MUST log at entry point** — every handler logs `Infow` on invocation with the operation name and key request params. This is the anchor point for future metrics (latency, request count). Example: `h.logger.Infow("handle create user", "email", input.Email)`
+- **Usecase MUST log every significant stage** — log execution start, result of each adapter call, and the final outcome. This enables tracing and future metrics. Example:
+  ```go
+  u.logger.Infow("execute create user", "email", input.Email)
+  // ... adapter call ...
+  u.logger.Infow("user created in db", "user_id", created.ID)
+  ```
 
 ---
 
@@ -636,20 +837,21 @@ u.logger.Warnw("deprecated endpoint called", "path", c.Request.URL.Path)
 When creating a new feature (e.g., "create order"), follow this exact sequence:
 
 1. **Domain model** — Add `internal/domain/order.go` if the entity doesn't exist yet
-2. **Adapter methods** — Add methods to the relevant adapter (e.g., `internal/adapter/postgres/order.go`) that return domain types
-3. **Usecase package** — Create `internal/create_order_uc/` with:
+2. **Migrations** — Add SQL migration in `migrations/` if new tables/columns needed, run `make migrate-up`
+3. **SQL queries** — Write `.sql` file in `internal/adapter/postgres/queries/order.sql` with sqlc annotations
+4. **Run `make sqlc`** — generates type-safe Go code in `internal/adapter/postgres/generated/`
+5. **Adapter methods** — Add methods to `internal/adapter/postgres/order.go` that call `a.q.QueryName()` and map results to domain types
+6. **Usecase package** — Create `internal/create_order_uc/` with:
    - `dto.go` — Input (with Validate), Output
    - `usecase.go` — Interface for dependencies, Usecase struct, New(), Execute()
    - `http_v1.go` — HTTPv1 struct, NewHTTPv1(), Handle()
    - `wire.go` — `var Set = wire.NewSet(New, NewHTTPv1)`
    - `helpers.go` — if needed
-4. **Controller** — Add the handler parameter to the Controller function signature, add route mapping
-5. **Wire** — Add `create_order_uc.Set` to `cmd/app/wire.go` in the Usecases section
-6. **Update Controller Wire** — If the Controller function signature changed, Wire will pick it up automatically
-7. **Run `make wire`** to regenerate wire_gen.go
-8. **Environment** — Add any new env vars to `.env.development`
-9. **Migrations** — Add SQL migration in `migrations/` if needed
-10. **Swagger** — Add annotations to the handler, run `make swagger`
+7. **Controller** — Add the handler parameter to the Controller function signature, add route mapping
+8. **Wire** — Add `create_order_uc.Set` to `cmd/app/wire.go` in the Usecases section
+9. **Run `make wire`** to regenerate wire_gen.go
+10. **Environment** — Add any new env vars to `.env.development`
+11. **Swagger** — Add annotations to the handler, run `make swagger`
 
 ---
 
@@ -665,3 +867,6 @@ When creating a new feature (e.g., "create order"), follow this exact sequence:
 8. **pkg/ is pure infrastructure.** No business logic, no domain imports.
 9. **Domain imports nothing from internal/.** Domain is the innermost layer.
 10. **Pass context.Context as first argument.** Always propagate context from handler to usecase to adapter.
+11. **Config lives where it's used.** If an env var is only used by one package, put `config.go` with `LoadConfig()` in that package — not in a central config. Each package owns its config via `envconfig`.
+12. **All postgres queries go through sqlc.** Never write raw SQL in Go code. Write `.sql` files in `internal/adapter/postgres/queries/`, run `make sqlc`, use the generated `Queries` type in the adapter.
+13. **All cross-cutting checks go in middleware.** JWT auth, role verification, rate limiting, and any other pre-business-logic checks are Gin middleware in `internal/controller/http_v1/middleware/`. Controller only does routing + attaching middleware to groups. Handler only parses request → validates → calls usecase.

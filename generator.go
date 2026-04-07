@@ -42,6 +42,7 @@ func getMappings() []templateMapping {
 		{Source: "templates/base/pkg_hash/hash.go.tpl", Target: "pkg/hash/hash.go"},
 		// internal/controller
 		{Source: "templates/base/internal_controller/controller.go.tmpl", Target: "internal/controller/http_v1/controller.go", IsTmpl: true},
+		{Source: "templates/base/internal_controller/config.go.tpl", Target: "internal/controller/http_v1/config.go"},
 		{Source: "templates/base/internal_controller/wire.go.tpl", Target: "internal/controller/http_v1/wire.go"},
 		// internal/health
 		{Source: "templates/base/internal_health/http_v1.go.tpl", Target: "internal/health/http_v1.go"},

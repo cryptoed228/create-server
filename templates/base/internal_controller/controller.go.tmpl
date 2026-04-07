@@ -12,18 +12,18 @@ import (
 )
 
 {{- if .Centrifuge}}
-func Controller(wsHandler *ws.Handler) *gin.Engine {
+func Controller(cfg Config, wsHandler *ws.Handler) *gin.Engine {
 {{- else}}
-func Controller() *gin.Engine {
+func Controller(cfg Config) *gin.Engine {
 {{- end}}
 	r := gin.Default()
 
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Content-Type", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
+		AllowOrigins:     cfg.AllowOrigins,
+		AllowMethods:     cfg.AllowMethods,
+		AllowHeaders:     cfg.AllowHeaders,
+		ExposeHeaders:    cfg.ExposeHeaders,
+		AllowCredentials: cfg.AllowCredentials,
 	}))
 
 	r.GET("/ping", health.Handle)
